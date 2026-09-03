@@ -17,7 +17,7 @@ Sa activity na ito, natutunan ko kung paano gamitin ang Provider pattern sa isan
 
 Sa activity na ito, natutunan ko kung paano gumawa ng Cart Screen at i-connect ito sa API ng Bulldog Exchange. Natutunan ko rin kung paano kumuha ng cart gamit ang user ID, mag-display ng products at quantity, at mag-open ng product details kapag pinindot ang item. Na-implement ko rin ang Add to Cart function at paggamit ng FloatingActionButton para sa chat. Mas naging clear sa akin kung paano kumukuha at nagsesend ng data ang Flutter application sa API.
 
-## Lab Activity 4: Discussion
+## Lab Activity 4: 
 
 Sa activity na ito, gumawa ako ng User model at UserService para maayos na makuha at maproseso ang user data mula sa DummyJSON API. Ang UserService ang humahawak sa sign in at pagkuha ng user details, habang ginagamit ng Sign In, Profile, at Cart screens ang result ng service.
 
