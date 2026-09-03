@@ -7,6 +7,9 @@ import '../models/product.dart';
 // services
 import '../services/product_service.dart';
 
+// screens
+import 'detail_screen.dart';
+
 // widgets
 import '../widgets/custom_text.dart';
 
@@ -19,8 +22,7 @@ class ProductScreen extends StatefulWidget {
 
 class _ProductScreenState extends State<ProductScreen> {
   late final Future<List<Product>> _productsFuture;
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
@@ -57,10 +59,7 @@ class _ProductScreenState extends State<ProductScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: 16.w,
-          vertical: 16.h,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -96,8 +95,7 @@ class _ProductScreenState extends State<ProductScreen> {
             FutureBuilder<List<Product>>(
               future: _productsFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32.0),
@@ -114,8 +112,8 @@ class _ProductScreenState extends State<ProductScreen> {
                 }
 
                 final products = (snapshot.data ?? [])
-                  .where(_matchesSearch)
-                  .toList();
+                    .where(_matchesSearch)
+                    .toList();
 
                 if (products.isEmpty) {
                   return CustomText(
@@ -126,15 +124,13 @@ class _ProductScreenState extends State<ProductScreen> {
 
                 return GridView.builder(
                   shrinkWrap: true,
-                  physics:
-                      const NeverScrollableScrollPhysics(),
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: products.length,
 
                   // IMPORTANT:
                   // Do NOT use const here because .w and .h
                   // are ScreenUtil extension methods.
-                  gridDelegate:
-                      SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 10.w,
                     mainAxisSpacing: 10.h,
@@ -148,57 +144,58 @@ class _ProductScreenState extends State<ProductScreen> {
                       elevation: 2,
                       clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(12.r),
+                        borderRadius: BorderRadius.circular(12.r),
                       ),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Image.network(
-                              product.thumbnail,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              errorBuilder:
-                                  (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.image,
-                                  size: 24.sp,
-                                );
-                              },
+                      child: InkWell(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DetailScreen(
+                              productId: product.id,
+                              product: product,
                             ),
                           ),
-
-                          Padding(
-                            padding: EdgeInsets.all(8.w),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                CustomText(
-                                  text: product.title,
-                                  fontSize: 14.sp,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                ),
-
-                                SizedBox(height: 4.h),
-
-                                CustomText(
-                                  text:
-                                      '\$${product.price.toStringAsFixed(2)}',
-                                  fontSize: 13.sp,
-                                  fontWeight:
-                                      FontWeight.w600,
-                                ),
-                              ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Image.network(
+                                product.thumbnail,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(Icons.image, size: 24.sp);
+                                },
+                              ),
                             ),
-                          ),
-                        ],
+
+                            Padding(
+                              padding: EdgeInsets.all(8.w),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CustomText(
+                                    text: product.title,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.bold,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+
+                                  SizedBox(height: 4.h),
+
+                                  CustomText(
+                                    text:
+                                        '\$${product.price.toStringAsFixed(2)}',
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
