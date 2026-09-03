@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 import '../models/product.dart';
@@ -35,8 +36,11 @@ class _DetailScreenState extends State<DetailScreen> {
 
     try {
       // Enhancement 3: Add selected product to the user's cart using DummyJSON /carts/add.
+      final preferences = await SharedPreferences.getInstance();
+      final userId = preferences.getInt(userIdKey);
+      if (userId == null) throw Exception('No signed-in user was found');
       await _cartService.addToCart(
-        userId: defaultUserId,
+        userId: userId,
         productId: product.id,
         quantity: 1,
       );

@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'product_screen.dart';
 import 'cart_screen.dart';
 import 'chat_screen.dart';
+import 'profile_screen.dart';
 import '../widgets/custom_text.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -52,11 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedIndex = page;
             });
           },
-          children: const [
-            ProductScreen(),
-            CartScreen(),
-            Center(child: Text('Profile')),
-          ],
+          children: const [ProductScreen(), CartScreen(), ProfileScreen()],
         ),
         // Enhancement 2: Hide the chat FloatingActionButton while on cart_screen.
         floatingActionButton: _selectedIndex == 1

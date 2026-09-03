@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 // screens
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/splash_screen.dart';
 
 // providers
 import 'providers/theme_provider.dart';
@@ -14,10 +15,14 @@ import 'providers/theme_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]).then((_) async {
-    await dotenv.load(fileName: 'assets/.env');
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]).then((
+    _,
+  ) async {
+    try {
+      await dotenv.load(fileName: 'assets/.env');
+    } catch (_) {
+      // The API host has a safe fallback for platforms that cannot load assets.
+    }
     runApp(const RoblesAdvMobProg());
   });
 }
@@ -40,24 +45,19 @@ class RoblesAdvMobProg extends StatelessWidget {
             debugShowCheckedModeBanner: false,
 
             // Flutter's built-in themes
-            theme: ThemeData.light(
-              useMaterial3: true,
-            ),
+            theme: ThemeData.light(useMaterial3: true),
 
-            darkTheme: ThemeData.dark(
-              useMaterial3: true,
-            ),
+            darkTheme: ThemeData.dark(useMaterial3: true),
 
             // Controlled by your professor's ThemeProvider
-            themeMode: themeModel.isDark
-                ? ThemeMode.dark
-                : ThemeMode.light,
+            themeMode: themeModel.isDark ? ThemeMode.dark : ThemeMode.light,
 
             title: 'E-Commerce App',
 
-            initialRoute: '/home',
+            initialRoute: '/splash',
 
             routes: {
+              '/splash': (context) => const SplashScreen(),
               '/home': (context) => const HomeScreen(),
               '/settings': (context) => const SettingsScreen(),
             },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 import '../models/cart.dart';
@@ -21,14 +22,20 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
-    // Enhancement 3: Retrieve cart data using the current user's ID.
-    // Temporary fallback until authentication is available.
-    _cartsFuture = _cartService.getCartsByUserId(defaultUserId);
+    // Enhancement 3: Cart is rendered using the saved user's userId from SharedPreferences.
+    _cartsFuture = _loadCartForSavedUser();
+  }
+
+  Future<List<Cart>> _loadCartForSavedUser() async {
+    final preferences = await SharedPreferences.getInstance();
+    final userId = preferences.getInt(userIdKey);
+    if (userId == null) throw Exception('No signed-in user was found');
+    return _cartService.getCartsByUserId(userId);
   }
 
   Future<void> _refreshCart() async {
     setState(() {
-      _cartsFuture = _cartService.getCartsByUserId(defaultUserId);
+      _cartsFuture = _loadCartForSavedUser();
     });
     await _cartsFuture;
   }
@@ -53,13 +60,17 @@ class _CartScreenState extends State<CartScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
+              final errorMessage =
+                  snapshot.error.toString().contains('No signed-in user')
+                  ? 'Please sign in to view your cart.'
+                  : 'Unable to load your cart.';
               return Center(
                 child: Padding(
                   padding: EdgeInsets.all(24.w),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Unable to load your cart.'),
+                      Text(errorMessage),
                       SizedBox(height: 12.h),
                       FilledButton(
                         onPressed: _refreshCart,
