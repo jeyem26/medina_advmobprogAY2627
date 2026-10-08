@@ -26,3 +26,12 @@ Gumagamit ang Sign In screen ng DummyJSON authentication endpoint. Kapag tama an
 Sa Profile screen, kinukuha ang saved userId at ginagamit ito sa UserService para makuha ang tunay na user information. Ipinapakita rito ang profile image, pangalan, username, email, gender, at user ID. Sa Cart screen naman, ginagamit ang parehong saved userId sa CartService.getCartsByUserId para ang cart ng naka-sign-in na user ang ma-render, hindi ang cart ng ibang user.
 
 Nagdagdag din ako ng logout function na nag-aalis ng authentication data sa SharedPreferences at bumabalik sa Sign In screen. Sa ganitong paraan, nananatiling signed in ang user kapag isinara at binuksan muli ang app, pero maaari pa ring mag-logout kapag kinakailangan.
+
+## Lab Activity 5: 
+
+for this activity, we enhanced this flutter project application by adding firebase authentication.
+We connected firebase to handle the login, logout, password changes, and the account deletion. We also improved the userService so the authenticationn logic is more organized and more easy to manage. So this activity helped us to understand how firebase can be integrated to flutter app
+
+
+
+

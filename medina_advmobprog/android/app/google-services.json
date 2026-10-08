@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "650920711225",
+    "project_id": "medina-advmobprog-ay2627",
+    "storage_bucket": "medina-advmobprog-ay2627.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:650920711225:android:50463f6cd7282c204de9e8",
+        "android_client_info": {
+          "package_name": "com.example.medina_advmobprog"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "650920711225-5v25150duvd60tljm8fnear5f1ihjht1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK9kZMXJwhyqPvFGtnaC8lJiyVlT7-vno"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "650920711225-5v25150duvd60tljm8fnear5f1ihjht1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "650920711225-1t8d99r2mtl60rkfjt2tgfdmovs4vnef.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.medinaAdvmobprog"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

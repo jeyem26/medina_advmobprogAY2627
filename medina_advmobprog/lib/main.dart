@@ -3,11 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+// Firebase configuration
+import 'firebase_options.dart';
 
 // screens
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/signup_screen.dart';
 
 // providers
 import 'providers/theme_provider.dart';
@@ -15,16 +20,22 @@ import 'providers/theme_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]).then((
-    _,
-  ) async {
-    try {
-      await dotenv.load(fileName: 'assets/.env');
-    } catch (_) {
-      // The API host has a safe fallback for platforms that cannot load assets.
-    }
-    runApp(const RoblesAdvMobProg());
-  });
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
+  try {
+    await dotenv.load(fileName: 'assets/.env');
+  } catch (_) {
+    // The API host has a safe fallback for platforms that cannot load assets.
+  }
+
+  runApp(const RoblesAdvMobProg());
 }
 
 class RoblesAdvMobProg extends StatelessWidget {
@@ -49,8 +60,10 @@ class RoblesAdvMobProg extends StatelessWidget {
 
             darkTheme: ThemeData.dark(useMaterial3: true),
 
-            // Controlled by your professor's ThemeProvider
-            themeMode: themeModel.isDark ? ThemeMode.dark : ThemeMode.light,
+            // Controlled by ThemeProvider
+            themeMode: themeModel.isDark
+                ? ThemeMode.dark
+                : ThemeMode.light,
 
             title: 'E-Commerce App',
 
@@ -60,6 +73,7 @@ class RoblesAdvMobProg extends StatelessWidget {
               '/splash': (context) => const SplashScreen(),
               '/home': (context) => const HomeScreen(),
               '/settings': (context) => const SettingsScreen(),
+              '/signup': (context) => const SignupScreen(),
             },
           );
         },

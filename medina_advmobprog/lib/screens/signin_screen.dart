@@ -3,7 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
-import '../models/user.dart';
 import '../services/user_service.dart';
 import '../widgets/custom_text.dart';
 import 'home_screen.dart';
@@ -17,57 +16,97 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
   final _userService = UserService();
+
   bool _isLoading = false;
-  String? _errorMessage;
   bool _obscurePassword = true;
+  String? _errorMessage;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  // ============================================================
+  // FIREBASE SIGN IN
+  // ============================================================
+
   Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // Enhancement 2: User authentication using UserService and persistent login data.
-      final user = await _userService.login(
-        username: _usernameController.text.trim(),
+      // Firebase Authentication
+      final credential = await _userService.signIn(
+        email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      final firebaseUser = credential.user;
+
+      if (firebaseUser == null) {
+        throw Exception('Unable to retrieve user information.');
+      }
+
+      // Save login session.
       final preferences = await SharedPreferences.getInstance();
-      await _saveUser(preferences, user);
+
+      await preferences.setBool(
+        isLoggedInKey,
+        true,
+      );
+
+      await preferences.setString(
+        emailKey,
+        firebaseUser.email ?? _emailController.text.trim(),
+      );
+
+      await preferences.setString(
+        usernameKey,
+        firebaseUser.displayName ?? '',
+      );
 
       if (!mounted) return;
+
+      // Go to Home.
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        ),
         (route) => false,
       );
     } catch (error) {
-      if (mounted) setState(() => _errorMessage = error.toString());
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = error
+            .toString()
+            .replaceFirst('Exception: ', '');
+      });
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _saveUser(SharedPreferences preferences, User user) async {
-    await preferences.setBool(isLoggedInKey, true);
-    await preferences.setInt(userIdKey, user.id);
-    await preferences.setString(usernameKey, user.username);
-    await preferences.setString(emailKey, user.email);
-    if (user.accessToken != null) {
-      await preferences.setString(accessTokenKey, user.accessToken!);
-    }
-  }
+  // ============================================================
+  // UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -81,43 +120,93 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.storefront_rounded, size: 64.sp),
+                  // ==================================================
+                  // LOGO
+                  // ==================================================
+
+                  Icon(
+                    Icons.storefront_rounded,
+                    size: 64.sp,
+                  ),
+
                   SizedBox(height: 12.h),
+
+                  // ==================================================
+                  // TITLE
+                  // ==================================================
+
                   CustomText(
                     text: 'Bulldog Exchange',
                     fontSize: 25.sp,
                     fontWeight: FontWeight.bold,
                     textAlign: TextAlign.center,
                   ),
+
                   SizedBox(height: 8.h),
+
                   const Text(
                     'Sign in to continue',
                     textAlign: TextAlign.center,
                   ),
+
                   SizedBox(height: 30.h),
+
+                  // ==================================================
+                  // EMAIL
+                  // ==================================================
+
                   TextFormField(
-                    controller: _usernameController,
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Icons.person_outline),
+                      labelText: 'Email Address',
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                      ),
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Enter your username'
-                        : null,
+                    validator: (value) {
+                      if (value == null ||
+                          value.trim().isEmpty) {
+                        return 'Enter your email address';
+                      }
+
+                      final emailRegex = RegExp(
+                        r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                      );
+
+                      if (!emailRegex.hasMatch(
+                        value.trim(),
+                      )) {
+                        return 'Enter a valid email address';
+                      }
+
+                      return null;
+                    },
                   ),
+
                   SizedBox(height: 14.h),
+
+                  // ==================================================
+                  // PASSWORD
+                  // ==================================================
+
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                      ),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword =
+                                !_obscurePassword;
+                          });
+                        },
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility
@@ -125,33 +214,73 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                     ),
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Enter your password'
-                        : null,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Enter your password';
+                      }
+
+                      return null;
+                    },
                   ),
+
+                  // ==================================================
+                  // ERROR MESSAGE
+                  // ==================================================
+
                   if (_errorMessage != null) ...[
                     SizedBox(height: 12.h),
+
                     Text(
                       _errorMessage!,
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .error,
                       ),
                     ),
                   ],
+
                   SizedBox(height: 22.h),
+
+                  // ==================================================
+                  // SIGN IN BUTTON
+                  // ==================================================
+
                   SizedBox(
                     height: 50.h,
                     child: FilledButton(
-                      onPressed: _isLoading ? null : _signIn,
+                      onPressed:
+                          _isLoading ? null : _signIn,
                       child: _isLoading
                           ? SizedBox(
                               height: 20.w,
                               width: 20.w,
-                              child: const CircularProgressIndicator(
+                              child:
+                                  const CircularProgressIndicator(
                                 strokeWidth: 2,
                               ),
                             )
                           : const Text('Sign In'),
+                    ),
+                  ),
+
+                  SizedBox(height: 12.h),
+
+                  // ==================================================
+                  // CREATE ACCOUNT
+                  // ==================================================
+
+                  TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pushNamed(
+                              context,
+                              '/signup',
+                            );
+                          },
+                    child: const Text(
+                      'Don\'t have an account? Create Account',
                     ),
                   ),
                 ],

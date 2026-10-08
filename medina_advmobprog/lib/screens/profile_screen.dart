@@ -1,9 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../constants.dart';
-import '../models/user.dart';
 import '../services/user_service.dart';
 import 'signin_screen.dart';
 
@@ -15,8 +13,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late Future<User> _userFuture;
-  final _userService = UserService();
+  final UserService _userService = UserService();
+
+  late Future<firebase_auth.User?> _userFuture;
 
   @override
   void initState() {
@@ -24,78 +23,608 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _userFuture = _loadUser();
   }
 
-  Future<User> _loadUser() async {
-    final preferences = await SharedPreferences.getInstance();
-    final userId = preferences.getInt(userIdKey);
-    if (userId == null) throw Exception('No signed-in user was found');
-    return _userService.getUserById(userId);
+  // ============================================================
+  // LOAD FIREBASE USER
+  // ============================================================
+
+  Future<firebase_auth.User?> _loadUser() async {
+    return await _userService.getUserData();
   }
 
-  Future<void> _logout() async {
-    final preferences = await SharedPreferences.getInstance();
-    await Future.wait([
-      preferences.remove(isLoggedInKey),
-      preferences.remove(userIdKey),
-      preferences.remove(accessTokenKey),
-      preferences.remove(usernameKey),
-      preferences.remove(emailKey),
-    ]);
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SignInScreen()),
-      (route) => false,
+  // ============================================================
+  // UPDATE USERNAME
+  // ============================================================
+
+  Future<void> _showUpdateUsernameDialog(
+    firebase_auth.User user,
+  ) async {
+    final controller = TextEditingController(
+      text: user.displayName ?? '',
     );
+
+    final formKey = GlobalKey<FormState>();
+
+    final newUsername = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Update Username'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Username is required';
+                }
+
+                if (value.trim().length < 3) {
+                  return 'Username must be at least 3 characters';
+                }
+
+                return null;
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(
+                    dialogContext,
+                    controller.text.trim(),
+                  );
+                }
+              },
+              child: const Text('Update'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (newUsername == null || newUsername.isEmpty) {
+      return;
+    }
+
+    try {
+      await _userService.updateUsername(
+        username: newUsername,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _userFuture = _loadUser();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Username updated successfully.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+          ),
+        ),
+      );
+    }
   }
+
+  // ============================================================
+  // CHANGE PASSWORD
+  // ============================================================
+
+  Future<void> _showChangePasswordDialog(
+    firebase_auth.User user,
+  ) async {
+    final currentPasswordController =
+        TextEditingController();
+
+    final newPasswordController =
+        TextEditingController();
+
+    final confirmPasswordController =
+        TextEditingController();
+
+    final formKey = GlobalKey<FormState>();
+
+    final passwords = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Change Password'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: currentPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Current Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Enter your current password';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: newPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'New Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Enter a new password';
+                      }
+
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm New Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Confirm your new password';
+                      }
+
+                      if (value != newPasswordController.text) {
+                        return 'Passwords do not match';
+                      }
+
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(
+                    dialogContext,
+                    [
+                      currentPasswordController.text,
+                      newPasswordController.text,
+                    ],
+                  );
+                }
+              },
+              child: const Text('Change Password'),
+            ),
+          ],
+        );
+      },
+    );
+
+    currentPasswordController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
+
+    if (passwords == null) {
+      return;
+    }
+
+    try {
+      await _userService.resetPasswordFromCurrentPassword(
+        currentPassword: passwords[0],
+        newPassword: passwords[1],
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Password changed successfully.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // DELETE ACCOUNT
+  // ============================================================
+
+  Future<void> _deleteAccount(
+    firebase_auth.User user,
+  ) async {
+    final passwordController = TextEditingController();
+
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This action cannot be undone. '
+                'Enter your current password to confirm '
+                'account deletion.',
+              ),
+
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Current Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (passwordController.text.isNotEmpty) {
+                  Navigator.pop(
+                    dialogContext,
+                    passwordController.text,
+                  );
+                }
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    passwordController.dispose();
+
+    if (password == null || password.isEmpty) {
+      return;
+    }
+
+    try {
+      await _userService.deleteAccount(
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const SignInScreen(),
+        ),
+        (route) => false,
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
+  Future<void> _logout() async {
+    try {
+      await _userService.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const SignInScreen(),
+        ),
+        (route) => false,
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst(
+              'Exception: ',
+              '',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // PROFILE UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    // Enhancement 3: Profile screen renders saved user's API data using User model.
-    return FutureBuilder<User>(
+    return FutureBuilder<firebase_auth.User?>(
       future: _userFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return Center(
-            child: Text('Unable to load profile: ${snapshot.error}'),
+        // --------------------------------------------------------
+        // LOADING
+        // --------------------------------------------------------
+
+        if (snapshot.connectionState ==
+            ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
           );
         }
 
-        final user = snapshot.data!;
+        // --------------------------------------------------------
+        // ERROR
+        // --------------------------------------------------------
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.w),
+              child: Text(
+                'Unable to load profile:\n${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        // --------------------------------------------------------
+        // NO USER
+        // --------------------------------------------------------
+
+        final user = snapshot.data;
+
+        if (user == null) {
+          return const Center(
+            child: Text(
+              'No signed-in user was found.',
+            ),
+          );
+        }
+
+        // --------------------------------------------------------
+        // USER INFORMATION
+        // --------------------------------------------------------
+
+        final username =
+            user.displayName?.trim().isNotEmpty == true
+                ? user.displayName!
+                : 'No username set';
+
+        final email =
+            user.email ?? 'No email available';
+
+        // --------------------------------------------------------
+        // PROFILE CONTENT
+        // --------------------------------------------------------
+
         return SingleChildScrollView(
           padding: EdgeInsets.all(20.w),
           child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.stretch,
             children: [
-              CircleAvatar(
-                radius: 52.r,
-                backgroundImage: user.image.isEmpty
-                    ? null
-                    : NetworkImage(user.image),
-                child: user.image.isEmpty
-                    ? Icon(Icons.person, size: 48.sp)
-                    : null,
+              // ==================================================
+              // PROFILE IMAGE
+              // ==================================================
+
+              Center(
+                child: CircleAvatar(
+                  radius: 52.r,
+                  child: Icon(
+                    Icons.person,
+                    size: 48.sp,
+                  ),
+                ),
               ),
+
               SizedBox(height: 14.h),
+
+              // ==================================================
+              // USERNAME
+              // ==================================================
+
               Text(
-                '${user.firstName} ${user.lastName}'.trim(),
-                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold),
+                username,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              SizedBox(height: 20.h),
-              _ProfileRow(label: 'User ID', value: '${user.id}'),
-              _ProfileRow(label: 'Username', value: user.username),
-              _ProfileRow(label: 'Email', value: user.email),
-              _ProfileRow(label: 'Gender', value: user.gender),
+
+              SizedBox(height: 6.h),
+
+              // ==================================================
+              // EMAIL
+              // ==================================================
+
+              Text(
+                email,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                ),
+              ),
+
               SizedBox(height: 24.h),
+
+              // ==================================================
+              // ACCOUNT INFORMATION
+              // ==================================================
+
+              Card(
+                child: Column(
+                  children: [
+                    _ProfileRow(
+                      label: 'Username',
+                      value: username,
+                      icon: Icons.person_outline,
+                    ),
+
+                    _ProfileRow(
+                      label: 'Email',
+                      value: email,
+                      icon: Icons.email_outlined,
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 20.h),
+
               SizedBox(
                 width: double.infinity,
                 height: 48.h,
                 child: OutlinedButton.icon(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Log Out'),
+                  onPressed: () {
+                    _showUpdateUsernameDialog(user);
+                  },
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                  ),
+                  label: const Text(
+                    'Update Username',
+                  ),
                 ),
               ),
+
+              SizedBox(height: 12.h),
+
+              SizedBox(
+                width: double.infinity,
+                height: 48.h,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    _showChangePasswordDialog(user);
+                  },
+                  icon: const Icon(
+                    Icons.lock_outline,
+                  ),
+                  label: const Text(
+                    'Change Password',
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 12.h),
+
+              SizedBox(
+                width: double.infinity,
+                height: 48.h,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    _deleteAccount(user);
+                  },
+                  icon: const Icon(
+                    Icons.delete_outline,
+                  ),
+                  label: const Text(
+                    'Delete Account',
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 12.h),            
+
+              SizedBox(
+                width: double.infinity,
+                height: 48.h,
+                child: FilledButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(
+                    Icons.logout,
+                  ),
+                  label: const Text(
+                    'Log Out',
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 20.h),
             ],
           ),
         );
@@ -105,16 +634,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.label, required this.value});
+  const _ProfileRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   final String label;
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      leading: Icon(icon),
       title: Text(label),
-      subtitle: Text(value.isEmpty ? 'Not provided' : value),
+      subtitle: Text(
+        value.isEmpty ? 'Not provided' : value,
+      ),
     );
   }
 }
