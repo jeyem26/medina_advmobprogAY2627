@@ -9,3 +9,6 @@ const String userIdKey = 'userId';
 const String accessTokenKey = 'accessToken';
 const String usernameKey = 'username';
 const String emailKey = 'email';
+const String authMethodKey = 'authMethod';
+const String dummyJsonAuthMethod = 'dummyjson';
+const String firebaseAuthMethod = 'firebase';

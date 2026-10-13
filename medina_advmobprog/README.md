@@ -15,7 +15,7 @@ Sa activity na ito, natutunan ko kung paano gamitin ang Provider pattern sa isan
 
 ## Lab Activity 3
 
-Sa activity na ito, natutunan ko kung paano gumawa ng Cart Screen at i-connect ito sa API ng Bulldog Exchange. Natutunan ko rin kung paano kumuha ng cart gamit ang user ID, mag-display ng products at quantity, at mag-open ng product details kapag pinindot ang item. Na-implement ko rin ang Add to Cart function at paggamit ng FloatingActionButton para sa chat. Mas naging clear sa akin kung paano kumukuha at nagsesend ng data ang Flutter application sa API.
+Sa activity na to, natutunan ko kung paano gumawa ng Cart Screen at i-connect ito sa API ng Bulldog Exchange. Natutunan ko rin kung paano kumuha ng cart gamit ang user ID, mag-display ng products at quantity, at mag-open ng product details kapag pinindot ang item. Na-implement ko rin ang Add to Cart function at paggamit ng FloatingActionButton para sa chat. Mas naging clear sa akin kung paano kumukuha at nagsesend ng data ang Flutter application sa API.
 
 ## Lab Activity 4: 
 
@@ -31,6 +31,10 @@ Nagdagdag din ako ng logout function na nag-aalis ng authentication data sa Shar
 
 for this activity, we enhanced this flutter project application by adding firebase authentication.
 We connected firebase to handle the login, logout, password changes, and the account deletion. We also improved the userService so the authenticationn logic is more organized and more easy to manage. So this activity helped us to understand how firebase can be integrated to flutter app
+
+## Lab Activity 6: 
+
+For this activity, we enhanced our Flutter application by adding a chat feature that allows all registered users to communicate with each other. We integrated Firebase to support the messaging functionality and make communication easier within the app. This activity helped us understand how to implement real-time messaging in Flutter and how Firebase can be used to connect users in one application.
 
 
 

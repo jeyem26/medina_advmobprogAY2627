@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -14,56 +14,40 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  late Future<List<Cart>> _cartsFuture;
-
   final CartService _cartService = CartService();
-
-  final Map<int, int> _quantities = {};
-
-  // DummyJSON uses an integer user ID.
-  // Firebase uses a String UID, so they cannot be passed directly
-  // to the DummyJSON cart endpoint.
-  static const int _dummyJsonUserId = 1;
+  late Stream<List<CartProduct>> _cartStream;
 
   @override
   void initState() {
     super.initState();
-
-    _cartsFuture = _loadCartForSignedInUser();
+    _setCartStream();
   }
 
-  Future<List<Cart>> _loadCartForSignedInUser() async {
-    // Check Firebase authentication instead of SharedPreferences.
-    final firebaseUser = FirebaseAuth.instance.currentUser;
+  void _setCartStream() {
+    _cartStream = _cartService.watchCurrentCart();
+  }
 
-    if (firebaseUser == null) {
-      throw Exception('No signed-in user was found');
+  void _refreshCart() {
+    setState(() {
+      _setCartStream();
+    });
+  }
+
+  Future<void> _changeQuantity(CartProduct product, int change) async {
+    final next = (product.quantity + change).clamp(1, 999);
+    if (next == product.quantity) return;
+
+    try {
+      await _cartService.setCurrentProductQuantity(
+        product: product,
+        quantity: next,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update quantity: $error')),
+      );
     }
-
-    debugPrint('Firebase user: ${firebaseUser.email}');
-    debugPrint('Firebase UID: ${firebaseUser.uid}');
-    debugPrint('DummyJSON cart userId: $_dummyJsonUserId');
-
-    return _cartService.getCartsByUserId(_dummyJsonUserId);
-  }
-
-  Future<void> _refreshCart() async {
-    setState(() {
-      _cartsFuture = _loadCartForSignedInUser();
-    });
-
-    await _cartsFuture;
-  }
-
-  void _changeQuantity(CartProduct product, int change) {
-    final current =
-        _quantities[product.id] ?? product.quantity;
-
-    final next = (current + change).clamp(1, 999);
-
-    setState(() {
-      _quantities[product.id] = next;
-    });
   }
 
   @override
@@ -72,21 +56,21 @@ class _CartScreenState extends State<CartScreen> {
       color: const Color(0xFFF5F3FC),
       child: SafeArea(
         top: false,
-        child: FutureBuilder<List<Cart>>(
-          future: _cartsFuture,
+        child: StreamBuilder<List<CartProduct>>(
+          stream: _cartStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState ==
-                ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
             }
 
             if (snapshot.hasError) {
-              final errorMessage = snapshot.error
-                      .toString()
-                      .contains('No signed-in user')
+              final error = snapshot.error;
+              final errorMessage =
+                  error.toString().contains('No signed-in user')
                   ? 'Please sign in to view your cart.'
+                  : error is FirebaseException &&
+                        error.code == 'permission-denied'
+                  ? 'You do not have permission to view this cart.'
                   : 'Unable to load your cart.';
 
               return Center(
@@ -107,76 +91,41 @@ class _CartScreenState extends State<CartScreen> {
               );
             }
 
-            final carts = snapshot.data ?? [];
-
-            final products = carts
-                .expand((cart) => cart.products)
-                .toList();
-
-            debugPrint(
-              'CartScreen carts received: ${carts.length}',
-            );
-
-            debugPrint(
-              'CartScreen products received: ${products.length}',
-            );
+            final products = snapshot.data ?? <CartProduct>[];
 
             if (products.isEmpty) {
-              return const Center(
-                child: Text('Your cart is empty.'),
-              );
+              return const Center(child: Text('Your cart is empty.'));
             }
-
-            final cart = carts.first;
 
             final subtotal = products.fold<double>(
               0,
-              (sum, product) =>
-                  sum +
-                  product.price *
-                      (_quantities[product.id] ??
-                          product.quantity),
+              (accumulator, product) =>
+                  accumulator + product.price * product.quantity,
             );
 
             final discountedTotal = products.fold<double>(
               0,
-              (sum, product) =>
-                  sum +
-                  (product.quantity == 0
-                          ? 0
-                          : product.discountedTotal /
-                              product.quantity) *
-                      (_quantities[product.id] ??
-                          product.quantity),
+              (accumulator, product) =>
+                  accumulator +
+                  product.price *
+                      (1 - product.discountPercentage / 100) *
+                      product.quantity,
             );
 
             return ListView.separated(
-              padding: EdgeInsets.fromLTRB(
-                16.w,
-                18.h,
-                16.w,
-                18.h,
-              ),
+              padding: EdgeInsets.fromLTRB(16.w, 18.h, 16.w, 18.h),
               itemCount: products.length + 1,
-              separatorBuilder: (_, index) =>
-                  SizedBox(height: 12.h),
+              separatorBuilder: (_, index) => SizedBox(height: 12.h),
               itemBuilder: (context, index) {
                 if (index == products.length) {
                   return Padding(
                     padding: EdgeInsets.only(top: 8.h),
                     child: Column(
                       children: [
-                        _TotalRow(
-                          label: 'Subtotal',
-                          value: cart.total == 0
-                              ? subtotal
-                              : cart.total,
-                        ),
+                        _TotalRow(label: 'Subtotal', value: subtotal),
                         _TotalRow(
                           label: 'Discounted total',
-                          value: cart.discountedTotal == 0
-                              ? discountedTotal
-                              : cart.discountedTotal,
+                          value: discountedTotal,
                         ),
                         SizedBox(height: 8.h),
                         SizedBox(
@@ -184,28 +133,20 @@ class _CartScreenState extends State<CartScreen> {
                           height: 50.h,
                           child: FilledButton(
                             onPressed: () {
-                              ScaffoldMessenger.of(
-                                context,
-                              ).showSnackBar(
+                              ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content:
-                                      Text('Order confirmed'),
+                                  content: Text('Order confirmed'),
                                 ),
                               );
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFFFFB52D),
-                              foregroundColor:
-                                  const Color(0xFF2F2D35),
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(11.r),
+                              backgroundColor: const Color(0xFFFFB52D),
+                              foregroundColor: const Color(0xFF2F2D35),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(11.r),
                               ),
                             ),
-                            child:
-                                const Text('Confirm Order'),
+                            child: const Text('Confirm Order'),
                           ),
                         ),
                       ],
@@ -215,9 +156,7 @@ class _CartScreenState extends State<CartScreen> {
 
                 final product = products[index];
 
-                final quantity =
-                    _quantities[product.id] ??
-                        product.quantity;
+                final quantity = product.quantity;
 
                 return Card(
                   margin: EdgeInsets.zero,
@@ -225,78 +164,53 @@ class _CartScreenState extends State<CartScreen> {
                   elevation: 2,
                   shadowColor: Colors.black12,
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(14.r),
+                    borderRadius: BorderRadius.circular(14.r),
                   ),
                   child: InkWell(
-                    borderRadius:
-                        BorderRadius.circular(14.r),
+                    borderRadius: BorderRadius.circular(14.r),
                     onTap: () async {
-                      final added =
-                          await Navigator.push<bool>(
+                      final added = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              DetailScreen(
-                            productId: product.id,
-                          ),
+                          builder: (_) => DetailScreen(productId: product.id),
                         ),
                       );
 
-                      if (added == true && mounted) {
-                        await _refreshCart();
-                      }
+                      if (added == true && mounted) _refreshCart();
                     },
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        12.w,
-                        16.h,
-                        10.w,
-                        16.h,
-                      ),
+                      padding: EdgeInsets.fromLTRB(12.w, 16.h, 10.w, 16.h),
                       child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Image.network(
                             product.thumbnail,
                             width: 82.w,
                             height: 96.h,
                             fit: BoxFit.cover,
-                            errorBuilder:
-                                (context, error, stackTrace) {
+                            errorBuilder: (context, error, stackTrace) {
                               return Container(
                                 width: 82.w,
                                 height: 96.h,
-                                color:
-                                    const Color(0xFFF0EFF6),
-                                child: const Icon(
-                                  Icons.image_outlined,
-                                ),
+                                color: const Color(0xFFF0EFF6),
+                                child: const Icon(Icons.image_outlined),
                               );
                             },
                           ),
                           SizedBox(width: 12.w),
                           Expanded(
                             child: Column(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   product.title,
                                   maxLines: 2,
-                                  overflow:
-                                      TextOverflow.ellipsis,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 15.sp,
-                                    fontWeight:
-                                        FontWeight.w700,
-                                    color:
-                                        const Color(
-                                      0xFF29283A,
-                                    ),
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF29283A),
                                   ),
                                 ),
                                 SizedBox(height: 8.h),
@@ -304,24 +218,17 @@ class _CartScreenState extends State<CartScreen> {
                                   '\$${product.price.toStringAsFixed(2)}',
                                   style: TextStyle(
                                     fontSize: 15.sp,
-                                    fontWeight:
-                                        FontWeight.w600,
-                                    color:
-                                        const Color(
-                                      0xFF383749,
-                                    ),
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF383749),
                                   ),
                                 ),
                                 SizedBox(height: 5.h),
                                 Text(
                                   '${product.discountPercentage.toStringAsFixed(0)}% off '
-                                  '• \$${product.total.toStringAsFixed(2)} total',
+                                  '• \$${(product.price * quantity).toStringAsFixed(2)} total',
                                   style: TextStyle(
                                     fontSize: 11.sp,
-                                    color:
-                                        const Color(
-                                      0xFF777584,
-                                    ),
+                                    color: const Color(0xFF777584),
                                   ),
                                 ),
                               ],
@@ -329,21 +236,13 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                           SizedBox(width: 8.w),
                           Column(
-                            mainAxisSize:
-                                MainAxisSize.min,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               _QuantityButton(
                                 icon: Icons.add,
-                                backgroundColor:
-                                    const Color(
-                                  0xFFFFB52D,
-                                ),
+                                backgroundColor: const Color(0xFFFFB52D),
                                 iconColor: Colors.white,
-                                onPressed: () =>
-                                    _changeQuantity(
-                                  product,
-                                  1,
-                                ),
+                                onPressed: () => _changeQuantity(product, 1),
                               ),
                               SizedBox(height: 25.h),
                               Center(
@@ -351,31 +250,17 @@ class _CartScreenState extends State<CartScreen> {
                                   '$quantity',
                                   style: TextStyle(
                                     fontSize: 14.sp,
-                                    fontWeight:
-                                        FontWeight.w700,
-                                    color:
-                                        const Color(
-                                      0xFF393746,
-                                    ),
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF393746),
                                   ),
                                 ),
                               ),
                               SizedBox(height: 25.h),
                               _QuantityButton(
                                 icon: Icons.remove,
-                                backgroundColor:
-                                    const Color(
-                                  0xFFF0F0F3,
-                                ),
-                                iconColor:
-                                    const Color(
-                                  0xFF64636D,
-                                ),
-                                onPressed: () =>
-                                    _changeQuantity(
-                                  product,
-                                  -1,
-                                ),
+                                backgroundColor: const Color(0xFFF0F0F3),
+                                iconColor: const Color(0xFF64636D),
+                                onPressed: () => _changeQuantity(product, -1),
                               ),
                             ],
                           ),
@@ -416,26 +301,18 @@ class _QuantityButton extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: backgroundColor,
           shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(9.r),
+            borderRadius: BorderRadius.circular(9.r),
           ),
         ),
         onPressed: onPressed,
-        icon: Icon(
-          icon,
-          size: 19.sp,
-          color: iconColor,
-        ),
+        icon: Icon(icon, size: 19.sp, color: iconColor),
       ),
     );
   }
 }
 
 class _TotalRow extends StatelessWidget {
-  const _TotalRow({
-    required this.label,
-    required this.value,
-  });
+  const _TotalRow({required this.label, required this.value});
 
   final String label;
   final double value;
@@ -445,15 +322,9 @@ class _TotalRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 3.h),
       child: Row(
-        mainAxisAlignment:
-            MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF64626F),
-            ),
-          ),
+          Text(label, style: const TextStyle(color: Color(0xFF64626F))),
           Text(
             '\$${value.toStringAsFixed(2)}',
             style: const TextStyle(

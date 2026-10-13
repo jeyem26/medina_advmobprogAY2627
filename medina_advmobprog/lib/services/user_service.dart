@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:http/http.dart' as http;
 
@@ -9,10 +10,7 @@ import '../models/user.dart';
 class UserService {
   final firebase_auth.FirebaseAuth _firebaseAuth =
       firebase_auth.FirebaseAuth.instance;
-
-  // ============================================================
-  // DUMMYJSON LOGIN
-  // ============================================================
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<User> login({
     required String username,
@@ -20,9 +18,7 @@ class UserService {
   }) async {
     final response = await http.post(
       Uri.parse('$host/auth/login'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'username': username,
         'password': password,
@@ -31,16 +27,12 @@ class UserService {
     );
 
     if (response.statusCode == 200) {
-      return User.fromJson(
-        jsonDecode(response.body),
-      );
+      return User.fromJson(jsonDecode(response.body));
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-    throw Exception(
-      body['message'] ?? 'Sign in failed',
-    );
+    throw Exception(body['message'] ?? 'Sign in failed');
   }
 
   // ============================================================
@@ -48,19 +40,13 @@ class UserService {
   // ============================================================
 
   Future<User> getUserById(int userId) async {
-    final response = await http.get(
-      Uri.parse('$host/users/$userId'),
-    );
+    final response = await http.get(Uri.parse('$host/users/$userId'));
 
     if (response.statusCode == 200) {
-      return User.fromJson(
-        jsonDecode(response.body),
-      );
+      return User.fromJson(jsonDecode(response.body));
     }
 
-    throw Exception(
-      'Failed to load user information',
-    );
+    throw Exception('Failed to load user information');
   }
 
   // ============================================================
@@ -80,14 +66,14 @@ class UserService {
     required String password,
   }) async {
     try {
-      return await _firebaseAuth.signInWithEmailAndPassword(
+      final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
+      await syncCurrentUserProfile();
+      return credential;
     } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(
-        _firebaseErrorMessage(e),
-      );
+      throw Exception(_firebaseErrorMessage(e));
     }
   }
 
@@ -99,27 +85,26 @@ class UserService {
     required String email,
     required String password,
     String? username,
+    String? firstName,
+    String? lastName,
   }) async {
     try {
-      final credential =
-          await _firebaseAuth.createUserWithEmailAndPassword(
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
       if (username != null && username.trim().isNotEmpty) {
-        await credential.user?.updateDisplayName(
-          username.trim(),
-        );
+        await credential.user?.updateDisplayName(username.trim());
 
         await credential.user?.reload();
       }
 
+      await syncCurrentUserProfile(firstName: firstName, lastName: lastName);
+
       return credential;
     } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(
-        _firebaseErrorMessage(e),
-      );
+      throw Exception(_firebaseErrorMessage(e));
     }
   }
 
@@ -129,6 +114,18 @@ class UserService {
 
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
+  }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    if (email.trim().isEmpty) {
+      throw Exception('Enter your email address first.');
+    }
+
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      throw Exception(_firebaseErrorMessage(e));
+    }
   }
 
   // ============================================================
@@ -151,34 +148,75 @@ class UserService {
   // UPDATE USERNAME
   // ============================================================
 
-  Future<void> updateUsername({
-    required String username,
+  Future<void> updateUsername({required String username}) async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw Exception('No user is currently signed in.');
+    }
+
+    if (username.trim().isEmpty) {
+      throw Exception('Username cannot be empty.');
+    }
+
+    try {
+      await user.updateDisplayName(username.trim());
+
+      await user.reload();
+      await syncCurrentUserProfile();
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      throw Exception(_firebaseErrorMessage(e));
+    }
+  }
+
+  Future<void> syncCurrentUserProfile({
+    String? firstName,
+    String? lastName,
   }) async {
     final user = _firebaseAuth.currentUser;
 
     if (user == null) {
-      throw Exception(
-        'No user is currently signed in.',
-      );
+      throw Exception('No user is currently signed in.');
     }
 
-    if (username.trim().isEmpty) {
-      throw Exception(
-        'Username cannot be empty.',
-      );
+    final resolvedFirstName = firstName?.trim();
+    final resolvedLastName = lastName?.trim();
+    final fullName = [
+      resolvedFirstName,
+      resolvedLastName,
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
+    final displayName = user.displayName?.trim();
+    final name = displayName != null && displayName.isNotEmpty
+        ? displayName
+        : fullName;
+
+    final profile = <String, dynamic>{
+      'uid': user.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (user.email != null && user.email!.isNotEmpty) {
+      profile['email'] = user.email;
+    }
+    if (name.isNotEmpty) {
+      profile['name'] = name;
+      profile['displayName'] = name;
+      profile['username'] = name;
+    }
+    if (resolvedFirstName != null && resolvedFirstName.isNotEmpty) {
+      profile['firstName'] = resolvedFirstName;
+    }
+    if (resolvedLastName != null && resolvedLastName.isNotEmpty) {
+      profile['lastName'] = resolvedLastName;
+    }
+    if (user.photoURL != null && user.photoURL!.isNotEmpty) {
+      profile['photoURL'] = user.photoURL;
     }
 
-    try {
-      await user.updateDisplayName(
-        username.trim(),
-      );
-
-      await user.reload();
-    } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(
-        _firebaseErrorMessage(e),
-      );
-    }
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .set(profile, SetOptions(merge: true));
   }
 
   // ============================================================
@@ -192,57 +230,40 @@ class UserService {
     final user = _firebaseAuth.currentUser;
 
     if (user == null) {
-      throw Exception(
-        'No user is currently signed in.',
-      );
+      throw Exception('No user is currently signed in.');
     }
 
     final email = user.email;
 
     if (email == null || email.isEmpty) {
-      throw Exception(
-        'No email is associated with this account.',
-      );
+      throw Exception('No email is associated with this account.');
     }
 
     if (currentPassword.isEmpty) {
-      throw Exception(
-        'Current password is required.',
-      );
+      throw Exception('Current password is required.');
     }
 
     if (newPassword.isEmpty) {
-      throw Exception(
-        'New password is required.',
-      );
+      throw Exception('New password is required.');
     }
 
     if (newPassword.length < 6) {
-      throw Exception(
-        'New password must be at least 6 characters.',
-      );
+      throw Exception('New password must be at least 6 characters.');
     }
 
     try {
-      final credential =
-          firebase_auth.EmailAuthProvider.credential(
+      final credential = firebase_auth.EmailAuthProvider.credential(
         email: email,
         password: currentPassword,
       );
 
       // Re-authenticate before changing password.
-      await user.reauthenticateWithCredential(
-        credential,
-      );
+      await user.reauthenticateWithCredential(credential);
 
       // Change password.
-      await user.updatePassword(
-        newPassword,
-      );
+      await user.updatePassword(newPassword);
     } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(
-        _firebaseErrorMessage(e),
-      );
+      throw Exception(_firebaseErrorMessage(e));
     }
   }
 
@@ -250,49 +271,36 @@ class UserService {
   // DELETE ACCOUNT
   // ============================================================
 
-  Future<void> deleteAccount({
-    required String password,
-  }) async {
+  Future<void> deleteAccount({required String password}) async {
     final user = _firebaseAuth.currentUser;
 
     if (user == null) {
-      throw Exception(
-        'No user is currently signed in.',
-      );
+      throw Exception('No user is currently signed in.');
     }
 
     final email = user.email;
 
     if (email == null || email.isEmpty) {
-      throw Exception(
-        'No email is associated with this account.',
-      );
+      throw Exception('No email is associated with this account.');
     }
 
     if (password.isEmpty) {
-      throw Exception(
-        'Password is required.',
-      );
+      throw Exception('Password is required.');
     }
 
     try {
-      final credential =
-          firebase_auth.EmailAuthProvider.credential(
+      final credential = firebase_auth.EmailAuthProvider.credential(
         email: email,
         password: password,
       );
 
       // Re-authenticate before deleting the account.
-      await user.reauthenticateWithCredential(
-        credential,
-      );
+      await user.reauthenticateWithCredential(credential);
 
       // Delete the Firebase account.
       await user.delete();
     } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(
-        _firebaseErrorMessage(e),
-      );
+      throw Exception(_firebaseErrorMessage(e));
     }
   }
 
@@ -300,9 +308,7 @@ class UserService {
   // FIREBASE ERROR MESSAGES
   // ============================================================
 
-  String _firebaseErrorMessage(
-    firebase_auth.FirebaseAuthException e,
-  ) {
+  String _firebaseErrorMessage(firebase_auth.FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
         return 'The email address is invalid.';

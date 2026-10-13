@@ -10,6 +10,9 @@ import 'firebase_options.dart';
 
 // screens
 import 'screens/home_screen.dart';
+import 'screens/auth_selection_screen.dart';
+import 'screens/dummyjson_signin_screen.dart';
+import 'screens/signin_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/signup_screen.dart';
@@ -21,19 +24,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   try {
     await dotenv.load(fileName: 'assets/.env');
-  } catch (_) {
-    // The API host has a safe fallback for platforms that cannot load assets.
-  }
+  } catch (_) {}
 
   runApp(const RoblesAdvMobProg());
 }
@@ -61,9 +58,7 @@ class RoblesAdvMobProg extends StatelessWidget {
             darkTheme: ThemeData.dark(useMaterial3: true),
 
             // Controlled by ThemeProvider
-            themeMode: themeModel.isDark
-                ? ThemeMode.dark
-                : ThemeMode.light,
+            themeMode: themeModel.isDark ? ThemeMode.dark : ThemeMode.light,
 
             title: 'E-Commerce App',
 
@@ -71,6 +66,9 @@ class RoblesAdvMobProg extends StatelessWidget {
 
             routes: {
               '/splash': (context) => const SplashScreen(),
+              '/login': (context) => const AuthSelectionScreen(),
+              '/dummy-login': (context) => const DummyJsonSignInScreen(),
+              '/firebase-login': (context) => const SignInScreen(),
               '/home': (context) => const HomeScreen(),
               '/settings': (context) => const SettingsScreen(),
               '/signup': (context) => const SignupScreen(),

@@ -1,0 +1,130 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isParticipant(participants) {
+      return signedIn()
+          && participants is list
+          && participants.hasAny([request.auth.uid]);
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+
+      allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.uid == userId
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.keys().hasOnly([
+            'uid', 'email', 'name', 'displayName', 'username',
+            'firstName', 'lastName', 'photoURL', 'updatedAt'
+          ]);
+
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /carts/{userId}/items/{productId} {
+      function ownsCart() {
+        return signedIn() && request.auth.uid == userId;
+      }
+
+      function validCartItem() {
+        return request.resource.data.id is int
+            && request.resource.data.title is string
+            && request.resource.data.price is number
+            && request.resource.data.quantity is int
+            && request.resource.data.quantity >= 1
+            && request.resource.data.quantity <= 999
+            && request.resource.data.total is number
+            && request.resource.data.discountPercentage is number
+            && request.resource.data.discountedTotal is number
+            && request.resource.data.thumbnail is string
+            && request.resource.data.updatedAt == request.time;
+      }
+
+      allow read: if ownsCart();
+      allow create: if ownsCart()
+          && validCartItem();
+      allow update: if ownsCart()
+          && validCartItem()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'quantity', 'total', 'discountedTotal', 'updatedAt'
+          ]);
+      allow delete: if ownsCart();
+    }
+
+    match /chatRooms/{chatId} {
+      allow read: if isParticipant(resource.data.participants);
+
+      allow create: if signedIn()
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() == 2
+          && request.resource.data.participants.hasAny([request.auth.uid])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly([
+            'participants', 'createdAt'
+          ]);
+
+      allow update: if isParticipant(resource.data.participants)
+          && request.resource.data.participants == resource.data.participants
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessage', 'lastMessageAt', 'lastSenderId'
+          ])
+          && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['lastSenderId'])
+              || request.resource.data.lastSenderId == request.auth.uid)
+          && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['lastMessageAt'])
+              || request.resource.data.lastMessageAt == request.time)
+          && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['lastMessage'])
+              || request.resource.data.lastMessage is string);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function chatParticipants() {
+          return getAfter(
+            /databases/$(database)/documents/chatRooms/$(chatId)
+          ).data.participants;
+        }
+
+        allow read: if isParticipant(
+          get(/databases/$(database)/documents/chatRooms/$(chatId))
+            .data.participants
+        );
+
+        allow create: if signedIn()
+            && isParticipant(chatParticipants())
+            && request.resource.data.senderId == request.auth.uid
+            && request.resource.data.receiverId != request.auth.uid
+            && chatParticipants().hasAny([request.resource.data.receiverId])
+            && request.resource.data.message is string
+            && request.resource.data.message.size() > 0
+            && request.resource.data.timestamp == request.time
+            && request.resource.data.status == 'sent'
+            && request.resource.data.keys().hasOnly([
+              'senderId', 'receiverId', 'message', 'timestamp', 'status'
+            ]);
+
+        allow update: if signedIn()
+            && isParticipant(
+              get(/databases/$(database)/documents/chatRooms/$(chatId))
+                .data.participants
+            )
+            && resource.data.receiverId == request.auth.uid
+            && request.resource.data.status == 'seen'
+            && request.resource.data.seenAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'seenAt'
+            ]);
+
+        allow delete: if false;
+      }
+    }
+  }
+}

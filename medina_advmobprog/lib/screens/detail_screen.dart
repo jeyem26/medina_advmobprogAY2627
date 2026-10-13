@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,15 +36,21 @@ class _DetailScreenState extends State<DetailScreen> {
     setState(() => _isAdding = true);
 
     try {
-      // Enhancement 3: Add selected product to the user's cart using DummyJSON /carts/add.
       final preferences = await SharedPreferences.getInstance();
-      final userId = preferences.getInt(userIdKey);
-      if (userId == null) throw Exception('No signed-in user was found');
-      await _cartService.addToCart(
-        userId: userId,
-        productId: product.id,
-        quantity: 1,
-      );
+      final authMethod = preferences.getString(authMethodKey);
+
+      if (authMethod == dummyJsonAuthMethod) {
+        if (preferences.getInt(userIdKey) == null ||
+            (preferences.getString(accessTokenKey)?.isEmpty ?? true)) {
+          throw Exception(
+            'Your DummyJSON session has expired. Please sign in.',
+          );
+        }
+      } else if (FirebaseAuth.instance.currentUser == null) {
+        throw Exception('Please sign in before adding items to your cart.');
+      }
+
+      await _cartService.addProductToCart(product);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

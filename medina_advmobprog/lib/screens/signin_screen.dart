@@ -63,44 +63,63 @@ class _SignInScreenState extends State<SignInScreen> {
       // Save login session.
       final preferences = await SharedPreferences.getInstance();
 
-      await preferences.setBool(
-        isLoggedInKey,
-        true,
-      );
+      await preferences.setBool(isLoggedInKey, true);
+      await preferences.setString(authMethodKey, firebaseAuthMethod);
+      await preferences.remove(accessTokenKey);
+      await preferences.remove(userIdKey);
 
       await preferences.setString(
         emailKey,
         firebaseUser.email ?? _emailController.text.trim(),
       );
 
-      await preferences.setString(
-        usernameKey,
-        firebaseUser.displayName ?? '',
-      );
+      await preferences.setString(usernameKey, firebaseUser.displayName ?? '');
 
       if (!mounted) return;
 
       // Go to Home.
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
-        _errorMessage = error
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendPasswordResetEmail() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        _errorMessage = 'Enter your email address first.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _userService.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset email sent.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -111,6 +130,7 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Firebase Login')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -123,18 +143,13 @@ class _SignInScreenState extends State<SignInScreen> {
                   // ==================================================
                   // LOGO
                   // ==================================================
-
-                  Icon(
-                    Icons.storefront_rounded,
-                    size: 64.sp,
-                  ),
+                  Icon(Icons.storefront_rounded, size: 64.sp),
 
                   SizedBox(height: 12.h),
 
                   // ==================================================
                   // TITLE
                   // ==================================================
-
                   CustomText(
                     text: 'Bulldog Exchange',
                     fontSize: 25.sp,
@@ -154,30 +169,22 @@ class _SignInScreenState extends State<SignInScreen> {
                   // ==================================================
                   // EMAIL
                   // ==================================================
-
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'Email Address',
-                      prefixIcon: Icon(
-                        Icons.email_outlined,
-                      ),
+                      prefixIcon: Icon(Icons.email_outlined),
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
-                      if (value == null ||
-                          value.trim().isEmpty) {
+                      if (value == null || value.trim().isEmpty) {
                         return 'Enter your email address';
                       }
 
-                      final emailRegex = RegExp(
-                        r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                      );
+                      final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
-                      if (!emailRegex.hasMatch(
-                        value.trim(),
-                      )) {
+                      if (!emailRegex.hasMatch(value.trim())) {
                         return 'Enter a valid email address';
                       }
 
@@ -187,24 +194,28 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   SizedBox(height: 14.h),
 
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _sendPasswordResetEmail,
+                      child: const Text('Forgot Password?'),
+                    ),
+                  ),
+
                   // ==================================================
                   // PASSWORD
                   // ==================================================
-
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: const Icon(
-                        Icons.lock_outline,
-                      ),
+                      prefixIcon: const Icon(Icons.lock_outline),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         onPressed: () {
                           setState(() {
-                            _obscurePassword =
-                                !_obscurePassword;
+                            _obscurePassword = !_obscurePassword;
                           });
                         },
                         icon: Icon(
@@ -226,16 +237,13 @@ class _SignInScreenState extends State<SignInScreen> {
                   // ==================================================
                   // ERROR MESSAGE
                   // ==================================================
-
                   if (_errorMessage != null) ...[
                     SizedBox(height: 12.h),
 
                     Text(
                       _errorMessage!,
                       style: TextStyle(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .error,
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ],
@@ -245,18 +253,15 @@ class _SignInScreenState extends State<SignInScreen> {
                   // ==================================================
                   // SIGN IN BUTTON
                   // ==================================================
-
                   SizedBox(
                     height: 50.h,
                     child: FilledButton(
-                      onPressed:
-                          _isLoading ? null : _signIn,
+                      onPressed: _isLoading ? null : _signIn,
                       child: _isLoading
                           ? SizedBox(
                               height: 20.w,
                               width: 20.w,
-                              child:
-                                  const CircularProgressIndicator(
+                              child: const CircularProgressIndicator(
                                 strokeWidth: 2,
                               ),
                             )
@@ -269,19 +274,13 @@ class _SignInScreenState extends State<SignInScreen> {
                   // ==================================================
                   // CREATE ACCOUNT
                   // ==================================================
-
                   TextButton(
                     onPressed: _isLoading
                         ? null
                         : () {
-                            Navigator.pushNamed(
-                              context,
-                              '/signup',
-                            );
+                            Navigator.pushNamed(context, '/signup');
                           },
-                    child: const Text(
-                      'Don\'t have an account? Create Account',
-                    ),
+                    child: const Text('Don\'t have an account? Create Account'),
                   ),
                 ],
               ),

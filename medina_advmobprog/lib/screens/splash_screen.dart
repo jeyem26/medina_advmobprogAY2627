@@ -1,10 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 import '../widgets/custom_text.dart';
-import 'signin_screen.dart';
+import 'auth_selection_screen.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -26,11 +27,22 @@ class _SplashScreenState extends State<SplashScreen> {
     final preferences = await SharedPreferences.getInstance();
     final isLoggedIn = preferences.getBool(isLoggedInKey) ?? false;
     final userId = preferences.getInt(userIdKey);
+    final authMethod = preferences.getString(authMethodKey);
+    final token = preferences.getString(accessTokenKey);
+    final isDummyJsonSession =
+        isLoggedIn &&
+        authMethod == dummyJsonAuthMethod &&
+        userId != null &&
+        token != null &&
+        token.isNotEmpty;
+    final isFirebaseSession =
+        (authMethod == firebaseAuthMethod || authMethod == null) &&
+        FirebaseAuth.instance.currentUser != null;
 
     if (!mounted) return;
-    final destination = isLoggedIn && userId != null
+    final destination = isDummyJsonSession || isFirebaseSession
         ? const HomeScreen()
-        : const SignInScreen();
+        : const AuthSelectionScreen();
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => destination));

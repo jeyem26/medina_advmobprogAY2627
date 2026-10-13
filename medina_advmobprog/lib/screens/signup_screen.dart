@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../constants.dart';
 import '../services/user_service.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -16,26 +18,19 @@ class _SignupScreenState extends State<SignupScreen> {
   // TEXT CONTROLLERS
   // ============================================================
 
-  final TextEditingController _firstNameController =
-      TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
 
-  final TextEditingController _lastNameController =
-      TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
 
-  final TextEditingController _ageController =
-      TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
 
-  final TextEditingController _contactNoController =
-      TextEditingController();
+  final TextEditingController _contactNoController = TextEditingController();
 
-  final TextEditingController _usernameController =
-      TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
 
-  final TextEditingController _emailController =
-      TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
 
-  final TextEditingController _passwordController =
-      TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   final UserService _userService = UserService();
 
@@ -77,32 +72,30 @@ class _SignupScreenState extends State<SignupScreen> {
       await _userService.createAccount(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        username: _usernameController.text.trim(),
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
       );
 
-      // Save the username as the Firebase display name.
-      await _userService.updateUsername(
-        username: _usernameController.text.trim(),
-      );
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(authMethodKey, firebaseAuthMethod);
+      await preferences.setBool(isLoggedInKey, true);
+      await preferences.remove(accessTokenKey);
+      await preferences.remove(userIdKey);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created successfully!'),
-        ),
+        const SnackBar(content: Text('Account created successfully!')),
       );
 
       // Go to home after successful registration.
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceFirst('Exception: ', ''),
-          ),
-        ),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
       if (mounted) {
@@ -117,10 +110,7 @@ class _SignupScreenState extends State<SignupScreen> {
   // VALIDATORS
   // ============================================================
 
-  String? _requiredValidator(
-    String? value,
-    String fieldName,
-  ) {
+  String? _requiredValidator(String? value, String fieldName) {
     if (value == null || value.trim().isEmpty) {
       return '$fieldName is required';
     }
@@ -151,9 +141,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return 'Email address is required';
     }
 
-    final emailRegex = RegExp(
-      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-    );
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
     if (!emailRegex.hasMatch(value.trim())) {
       return 'Enter a valid email address';
@@ -196,9 +184,7 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-      ),
+      appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -211,10 +197,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const Text(
                   'Create your account',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
 
@@ -230,7 +213,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // FIRST NAME
                 // ==================================================
-
                 TextFormField(
                   controller: _firstNameController,
                   textCapitalization: TextCapitalization.words,
@@ -239,10 +221,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     icon: Icons.person_outline,
                   ),
                   validator: (value) {
-                    return _requiredValidator(
-                      value,
-                      'First name',
-                    );
+                    return _requiredValidator(value, 'First name');
                   },
                 ),
 
@@ -251,7 +230,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // LAST NAME
                 // ==================================================
-
                 TextFormField(
                   controller: _lastNameController,
                   textCapitalization: TextCapitalization.words,
@@ -260,10 +238,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     icon: Icons.person_outline,
                   ),
                   validator: (value) {
-                    return _requiredValidator(
-                      value,
-                      'Last name',
-                    );
+                    return _requiredValidator(value, 'Last name');
                   },
                 ),
 
@@ -272,7 +247,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // AGE
                 // ==================================================
-
                 TextFormField(
                   controller: _ageController,
                   keyboardType: TextInputType.number,
@@ -288,7 +262,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // CONTACT NUMBER
                 // ==================================================
-
                 TextFormField(
                   controller: _contactNoController,
                   keyboardType: TextInputType.phone,
@@ -297,10 +270,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     icon: Icons.phone_outlined,
                   ),
                   validator: (value) {
-                    return _requiredValidator(
-                      value,
-                      'Contact number',
-                    );
+                    return _requiredValidator(value, 'Contact number');
                   },
                 ),
 
@@ -309,7 +279,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // USERNAME
                 // ==================================================
-
                 TextFormField(
                   controller: _usernameController,
                   decoration: _inputDecoration(
@@ -317,10 +286,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     icon: Icons.account_circle_outlined,
                   ),
                   validator: (value) {
-                    return _requiredValidator(
-                      value,
-                      'Username',
-                    );
+                    return _requiredValidator(value, 'Username');
                   },
                 ),
 
@@ -329,7 +295,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // EMAIL
                 // ==================================================
-
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -345,28 +310,27 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // PASSWORD
                 // ==================================================
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  decoration: _inputDecoration(
-                    label: 'Password',
-                    icon: Icons.lock_outline,
-                  ).copyWith(
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                  decoration:
+                      _inputDecoration(
+                        label: 'Password',
+                        icon: Icons.lock_outline,
+                      ).copyWith(
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword =
-                              !_obscurePassword;
-                        });
-                      },
-                    ),
-                  ),
                   validator: _passwordValidator,
                 ),
 
@@ -375,19 +339,15 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // CREATE ACCOUNT BUTTON
                 // ==================================================
-
                 SizedBox(
                   height: 52,
                   child: ElevatedButton(
-                    onPressed:
-                        _isLoading ? null : _createAccount,
+                    onPressed: _isLoading ? null : _createAccount,
                     child: _isLoading
                         ? const SizedBox(
                             height: 24,
                             width: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text(
                             'Create Account',
@@ -404,16 +364,13 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ==================================================
                 // BACK TO LOGIN
                 // ==================================================
-
                 TextButton(
                   onPressed: _isLoading
                       ? null
                       : () {
                           Navigator.pop(context);
                         },
-                  child: const Text(
-                    'Already have an account? Login',
-                  ),
+                  child: const Text('Already have an account? Login'),
                 ),
               ],
             ),
